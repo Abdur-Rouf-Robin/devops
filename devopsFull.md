@@ -1,220 +1,192 @@
 # DevOps
 
-## Linux and Bash
+## chapter 1 Linux and Bash
 
-- The server is Linux. Bash is how you look at it before you change it.
-- pwd, ls, cd move you. cat and less read a file. tail -f follows a log.
-- ps and ss show processes and ports. A programme that is not listening is not a proxy problem.
-- grep finds a line. Do not grep a secret into a shared screen if you can avoid it.
-- A shell script has set -euo pipefail if you ship it, so a failed command does not continue.
-- Linux is the building. Bash is walking the corridors with a torch before you call a builder.
-- careful: Running a command you copied, as root, against production, because a forum said so.
-- The site is down. What is the first command?
-- I check whether the process is up and whether the port is listening, then the last lines of the nginx error log. I do not redeploy first.
+- the shell = a program that runs commands. Bash is the usual one on a server
+- a process we start in the shell is a child of the shell
+- `pwd` prints the folder. `ls` lists it. `cd` moves
+- a pipe `|` sends the output of one command into the next
+- redirect `>` writes a file. `>>` appends
+- permissions are read, write, execute, for owner, group, and others
+- `chmod` changes them. a private key is not world-readable
+- a unit file or PM2 keeps a process running after we log out. a command in an SSH session dies when we disconnect, unless we used a process manager
+- we edit on the laptop and deploy. we do not hotfix production by typing into a live file and forgetting
 
 ```bash
-ss -ltnp | head
+ls -la
+ps aux | grep node
 tail -n 100 /var/log/nginx/error.log
 ```
 
-- homework
+- `tail` shows the end of a log. that is the first place a 502 sends us
+- `grep` filters lines. the pipe is why `ps` and `grep` are one thought
+
+- homework of chapter 1
 ```bash
-ss -ltnp | head
-tail -n 100 /var/log/nginx/error.log
+# 1a  list files with their permissions
+# 1b  the last 50 nginx error lines
+# 1c  why a private key is not chmod 644
 ```
 
-## Networking basics
+## chapter 2 Networking basics
 
-- You need the path of one request: name, address, port, proxy, process.
-- DNS resolves the name. TCP connects to the address and port. TLS wraps it. HTTP is the message.
-- curl -v shows the path. It is the tool I trust before I trust a theory.
-- A firewall drop looks like a timeout. A refused connection means nothing is listening.
-- Inside Docker, localhost is the container.
-- Networking is the road, the gate, and the door. Say which one is shut.
-- careful: Restarting Node when DNS is what failed.
-- Timeout or connection refused?
-- Refused: the host answered and nothing is on that port. Timeout: a firewall, a route, or a process that never accepts. They are different bugs.
+- an interface has an address. the public one is how the internet reaches the box. a private one is how the box reaches the database on the same network
+- a port is the number of the program. 22 SSH, 80 HTTP, 443 HTTPS, 5432 Postgres
+- we do not publish 5432 to the world
+- DNS turns the name into the address. the firewall decides if the port is open
+- `curl` from the server tells us if the API is up without the browser
+- inside Docker, localhost is the container. the database host is the service name
 
 ```bash
-curl -v https://vms.arrobin.com/health
+curl -I https://vms.arrobin.com
+ss -lntp | head
 ```
 
-- homework
+- `-I` fetches headers. a 200 or a 301 is the front door answering
+- `ss` shows who is listening. the Nest port should be local if nginx is the public door
+
+- homework of chapter 2
 ```bash
-curl -v https://vms.arrobin.com/health
+# 2a  which port is public, 443 or 5432
+# 2b  why curl to localhost from the API container does not reach Postgres
+# 2c  what DNS answers, and what a firewall answers
 ```
 
-## Git and GitHub
+## chapter 3 Git and GitHub
 
-- Git is the history of the code. GitHub is the place the history is reviewed.
-- A commit is a snapshot with a message that says why.
-- A branch is a line of work. A pull request is the review.
-- main is deployable. You do not push broken experiments straight to it.
-- Rebase rewrites your unpushed commits. Do not rebase a branch other people have pulled, unless you have agreed.
-- Git is a notebook you cannot quietly tear a page out of once it is shared.
-- careful: A commit of node_modules, .env, or a database dump.
-- What is in a good commit message?
-- The why. 'Fix bug' is not a message. 'Ignore weather hours in the laytime window' is.
+- a commit = a snapshot with a message and a parent
+- a branch = a name for a commit we are building on
+- `status` shows what changed. `diff` shows the lines
+- `add` stages. `commit` records. `push` sends the branch
+- a pull request is a branch we ask to merge. the conversation and the checks live there
+- `main` is the branch we deploy. we do not rewrite its history after it is shared
+- a merge commit joins two lines. a rebase replays our commits on top. we rebase only branches that are not shared
+- `.gitignore` keeps `node_modules` and `.env` out of the repo
 
 ```bash
-git checkout -b laytime-weekend-rule
-git commit -m "Treat weather delays as exceptions in laytime"
+git status
+git diff
+git add backendFull.md
+git commit -m "Describe the HTTP status codes with examples."
+git push
 ```
 
-- homework
+- the message says why. the diff already says what
+- a secret in a commit stays in the history. we do not commit `.env`
+
+- homework of chapter 3
 ```bash
-git checkout -b laytime-weekend-rule
-git commit -m "Treat weather delays as exceptions in laytime"
+# 3a  the three commands from a changed file to a recorded commit
+# 3b  what a pull request is for
+# 3c  a file that must stay in .gitignore
 ```
 
-## Docker
+## chapter 4 Docker
 
-- Docker runs a process in a filesystem you built, so the server and the laptop share the same libraries.
-- A Dockerfile starts FROM a base image, copies the app, installs dependencies, and sets the command.
-- An image is the recipe's result. A container is a running image.
-- Layer order matters. Copy the lockfile and install before you copy the source, so a code change does not reinstall the world.
-- Do not run as root inside the image if you can add a user. Do not copy secrets into the image.
-- Docker is a shipping container. The crane does not care what is inside, as long as the doors match.
-- careful: A latest tag in production, so Monday's build is not Tuesday's build.
-- Image or container?
-- The image is the packed box. The container is the box opened and running. I can start two containers from one image.
+- an image = a packed filesystem and a start command
+- a container = a running image. it has its own files and its own network namespace
+- a Dockerfile builds the image in layers. a layer is cached when the lines above it did not change
+- we copy the lockfile and install dependencies before we copy the source, so a code change does not reinstall every package
+- the process in the container is PID 1. it should handle a stop signal and exit
+- we do not run as root if the process does not need to
+- localhost inside the container is the container
 
-```docker
-FROM node:22-alpine
+```dockerfile
+FROM node:20-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+RUN npm run build
 CMD ["node", "dist/main.js"]
 ```
 
-- homework
-```docker
-FROM node:22-alpine
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-CMD ["node", "dist/main.js"]
+- `npm ci` installs from the lockfile. it does not update it
+- the image does not contain `.env`. we pass environment at run time
+
+- homework of chapter 4
+```dockerfile
+# 4a  why package files are copied before the rest of the source
+# 4b  what localhost means in this container
+# 4c  where the database password comes from, if it is not in the image
 ```
 
-## Docker Compose
+## chapter 5 Docker Compose
 
-- Compose starts several containers with one file and one network.
-- Services: api, db, redis. depends_on waits for the process to start, not for Postgres to be ready to accept queries. A health check or a retry in the app covers that.
-- A named volume keeps the database across compose down. An anonymous volume does not, once it is removed.
-- The service name is the DNS name. The API uses db:5432, not localhost.
-- Compose is how you develop and how you might run a single server. It is not a multi-node cluster.
-- Compose is one kitchen with several cooks who know each other by name.
-- careful: Putting the database password in the file and committing it.
-- Why did the API fail on the first second?
-- Postgres was not ready. depends_on only waits for the start. I retry the connection, or I use a health check.
+- Compose starts several containers and gives them a network
+- the service name is the DNS name. the API reaches Postgres at `postgres`, not at localhost
+- a volume keeps the database files when the container is replaced
+- `depends_on` waits for the process to start. it does not wait for Postgres to accept connections. the app retries
+- VMS and Bracket compose files include Redis. Anemi's does not need Redis
 
 ```yaml
 services:
   api:
     build: .
-    depends_on: [db, redis]
-  db:
+    environment:
+      DATABASE_URL: postgres://app:app@postgres:5432/app
+    depends_on:
+      - postgres
+  postgres:
     image: postgres:16
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 volumes:
   pgdata:
 ```
 
-- homework
+- the URL host is `postgres` because that is the service name
+- the volume name `pgdata` is what survives `docker compose down` without `-v`
+
+- homework of chapter 5
 ```yaml
-services:
-  api:
-    build: .
-    depends_on: [db, redis]
-  db:
-    image: postgres:16
-    volumes: [pgdata:/var/lib/postgresql/data]
-volumes:
-  pgdata:
+# 5a  the host in DATABASE_URL, and why not localhost
+# 5b  what we lose if we remove the volume
+# 5c  which product's compose file has no Redis service
 ```
 
-## Kubernetes
+## chapter 6 Kubernetes and Helm
 
-- Kubernetes runs containers across machines. It restarts them, rolls them out, and attaches services.
-- A Pod is one or more containers. A Deployment keeps a number of Pods alive.
-- A Service is a stable address in front of Pods that come and go.
-- A ConfigMap is configuration. A Secret is a secret, and it is not magically safe just because of the name.
-- You do not need a cluster for one VPS and PM2. Say that. Then show you know the nouns.
-- Kubernetes is a harbour master for containers. A harbour master is a lot of staff for one boat.
-- careful: Drawing a cluster for a project that fits on one box, and calling that senior.
-- Have you run it in production?
-- If you have not, say no. I know the objects, and on a single machine I use Compose and PM2. I would reach for Kubernetes when we have several machines and a need to roll Pods without a custom script.
+- we have not operated a Kubernetes cluster. the notes still name the parts
+- a pod = one or more containers that share a network and are scheduled together
+- a deployment = the desired number of pods, and how to replace them
+- a service = a stable name and address in front of the pods
+- an ingress = the HTTP front door, the role nginx plays for us today
+- a configmap is configuration. a secret is a secret. both are mounted or injected as env
+- Helm = a package of those YAML files, with values we fill in
+- a chart is the package. a release is one install
+- the idea we already use is the same: more than one process, a front door, env for config, a restart when it dies
+- we do not draw pods on a diagram of the system we run today
 
-```
-Deployment keeps 2 API pods
-Service routes to their labels
-readiness probe hits /health
-```
-
-- homework
-```
-Deployment keeps 2 API pods
-Service routes to their labels
-readiness probe hits /health
+```text
+today: nginx -> node process managed by PM2 -> postgres
+the kubernetes words: ingress -> service -> deployment -> pod
 ```
 
-## Helm
+- a liveness probe restarts a stuck process. a readiness probe takes it out of the service until it can answer
+- those map to "PM2 restarts it" and "nginx stops sending traffic to a dead upstream"
 
-- Helm is a package manager for Kubernetes. A chart is a templated set of manifests.
-- values.yaml is the settings: image tag, replica count, host name.
-- The templates render Deployments and Services.
-- A release is one install. You can roll it back.
-- Without Kubernetes, Helm has nothing to sit on. Do not study the flags before the objects.
-- Helm is a form letter. The values are the blanks you fill for each office.
-- careful: Copy-pasting the rendered YAML into production and losing the chart.
-- Why template at all?
-- The staging host and the production host differ. The chart is the shared shape. The values are the difference.
-
-```bash
-helm upgrade --install vms ./chart --set image.tag=1.4.2
+- homework of chapter 6
+```text
+# 6a  pod, deployment, service, in one line each
+# 6b  the thing we run today that is closest to an ingress
+# 6c  what we say if we are asked whether we operate a cluster
 ```
 
-- homework
-```bash
-helm upgrade --install vms ./chart --set image.tag=1.4.2
-```
+## chapter 7 CI, GitHub Actions, and cloud
 
-## CI/CD pipelines
-
-- CI checks every change. CD delivers a change that passed.
-- On a pull request: install, lint, test. Fail the merge if tests fail.
-- On main: build an image, run migrations carefully, restart the process.
-- The pipeline uses the same commands you use locally, or it becomes a second source of truth.
-- A red main is a stop. You do not deploy around it.
-- CI is the door check. CD is the van that leaves only if the check passed.
-- careful: A pipeline that always goes green because the tests are skipped.
-- What is the smallest pipeline worth having?
-- Tests on the pull request, and a deploy of main that a human can also run by hand. A pipeline you cannot run locally will fail at midnight in a way you cannot see.
-
-```
-pull request -> npm test
-main -> build image -> deploy
-```
-
-- homework
-```
-pull request -> npm test
-main -> build image -> deploy
-```
-
-## GitHub Actions
-
-- GitHub Actions is the CI you already point at. A workflow is YAML. A job runs on a runner. Steps are commands.
-- on: pull_request runs the tests. on: push to main can deploy.
-- Use the lockfile. npm ci, not npm install, so the runner matches the repo.
-- Secrets live in the repository settings, not in the YAML.
-- Cache the npm directory if the install time hurts. Do not cache your way past a failing test.
-- Actions is a robot that follows the checklist you were going to forget at midnight.
-- careful: A secret echoed in a debug step.
-- Why npm ci?
-- It installs the lockfile exactly and fails if the lockfile is out of date. npm install may change versions and you will debug a ghost.
+- CI = every push runs the tests. a red check is not merged
+- CD = a green main can deploy. we still know which commit is on the server
+- GitHub Actions is the runner we use. a workflow file in `.github/workflows` lists the steps
+- a job checks out the repo, installs, and runs the test script
+- a secret in the workflow comes from the repo settings, not from the file
+- a cloud server is someone else's machine with an API. the nouns are compute, disk, network, and identity
+- a VM is a computer. a managed database is Postgres we do not patch ourselves, and we still design backups
+- a security group is a firewall. which ports, from where
+- object storage is the blob store for video
+- the bill follows CPU, disk, and egress
+- we name the machine in front of us. we do not invent a list of AWS products we have not opened
+- the picture's cloud line was under the play button. the ideas are the VM, the firewall, the disk, and the object store
 
 ```yaml
 name: test
@@ -228,272 +200,173 @@ jobs:
       - run: npm test
 ```
 
-- homework
+- `npm test` is Vitest or node:test, whichever the repo uses
+- the workflow does not print the database password
+
+- homework of chapter 7
 ```yaml
-name: test
-on: [pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm ci
-      - run: npm test
+# 7a  when this workflow runs
+# 7b  the step that must fail the pull request if a test fails
+# 7c  a cloud noun for "who may open port 443"
+# 7d  why a public video without a cache shows up on a bill
 ```
 
-## Cloud basics
+## chapter 8 Terraform and Ansible
 
-- A cloud server is someone else's machine with an API. The nouns are compute, disk, network, and identity.
-- A VM is a computer. A managed database is Postgres you do not patch yourself, and you still design backups.
-- A security group is a firewall: which ports, from where.
-- Object storage is the blob store.
-- The bill follows CPU, disk, and egress. A public video without a cache is an egress bill.
-- The cloud is a rented building. You still lock the doors.
-- careful: Opening port 5432 to the world so the laptop can connect.
-- Which cloud do you use?
-- Name the one in front of you, or say the site is a VPS you administer. Do not invent AWS services you have not opened. The ideas, firewall, disk, and object storage, transfer.
+- Terraform = a file that describes infrastructure. we plan, then we apply
+- the state file remembers what Terraform created. we do not edit the cloud by hand and also let Terraform own it, or they drift
+- state often contains secrets. it is not a public file
+- Ansible = SSH and a list of tasks that make a server match a description. install nginx, copy a unit file, restart
+- Terraform is better at "create the VM and the disk". Ansible is better at "the packages and the config files on that VM"
+- we may not have either in the current deploy. the deploy we have is Docker, nginx, PM2, and GitHub Actions
+- the words still have to be precise
 
-```
-VM runs nginx and the API
-managed Postgres, or Postgres on the VM if that is what you operate
-object storage for video
-```
-
-- homework
-```
-VM runs nginx and the API
-managed Postgres, or Postgres on the VM if that is what you operate
-object storage for video
-```
-
-## Terraform
-
-- Terraform describes servers and networks as code, and applies the difference.
-- You write resources. terraform plan shows what would change. apply does it.
-- The state file is the map of real ids. Lose it carelessly and Terraform wants to recreate the world.
-- Do not commit secrets into the files. The state can contain secrets too, so the state is not a public bucket.
-- For one VPS edited twice a year, a documented script may be enough. Say the threshold.
-- Terraform is a shopping list the shop will fulfil, and a notebook of what you already bought.
-- careful: Applying a plan you did not read, because it said 12 to destroy.
-- What is drift?
-- Someone changed the firewall in the console. The code no longer matches reality. plan shows the drift. I decide whether the code or the console is the mistake, then I make them match.
-
-```
-resource "server" "api" { image = "ubuntu-24" size = "2gb" }
-```
-
-- homework
-```
-resource "server" "api" { image = "ubuntu-24" size = "2gb" }
-```
-
-## Ansible
-
-- Ansible configures machines over SSH from a list of tasks.
-- A playbook installs nginx, copies a config, and restarts the service.
-- It is idempotent when the modules are. Running it twice should be a no-op the second time.
-- Inventory is the list of hosts.
-- It complements images. Docker already has the app. Ansible might have the host: firewall, nginx, certificates.
-- Ansible is a caretaker with a checklist. The second visit should find the house already in order.
-- careful: A shell task that is not idempotent, so the second run appends the same line again.
-- Ansible or a Dockerfile?
-- The Dockerfile is the app. Ansible is the machine around it, if the machine is not rebuilt from an image every time. I do not configure application libraries both ways and hope.
-
-```yaml
-- name: install nginx
-  apt: { name: nginx, state: present }
-```
-
-- homework
-```yaml
-- name: install nginx
-  apt: { name: nginx, state: present }
-```
-
-## nginx reverse proxy
-
-- nginx receives the public connection and passes it to Node.
-- It terminates TLS, serves the static Next build, and proxies /api to 127.0.0.1:3000.
-- proxy_set_header Host and the forwarded headers so the app knows the original scheme.
-- client_max_body_size must allow a video upload, or Anemi fails with 413.
-- WebSocket proxying needs the Upgrade headers, or Socket.IO falls over.
-- nginx is the front door. Node is the office. A 502 means the office did not pick up.
-- careful: Proxying sockets without the upgrade headers and debugging it as an application bug.
-- What is a 502 from nginx?
-- nginx is up and the upstream did not answer. Node is down, or the port is wrong, or the process is wedged. I look at the upstream, not at DNS.
-
-```nginx
-location /api/ {
-  proxy_pass http://127.0.0.1:3000/;
-  proxy_set_header Host $host;
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
+```hcl
+resource "local_file" "example" {
+  filename = "hello.txt"
+  content  = "hello"
 }
 ```
 
-- homework
+```yaml
+- name: nginx is installed
+  apt:
+    name: nginx
+    state: present
+```
+
+- `plan` shows the change. `apply` does it. we read the plan
+- an Ansible task should be safe to run twice. install "present" is. a blind append to a file is not
+
+- homework of chapter 8
+```text
+# 8a  what Terraform state remembers
+# 8b  why we do not commit a state file full of secrets
+# 8c  a task that is safe to run twice, and one that is not
+# 8d  the deploy tools we have actually used
+```
+
+## chapter 9 nginx and load balancers
+
+- nginx is the front door. TLS, the static build, and `/api` proxied to Nest
+- Caddy can do the same with automatic certificates. Anemi's notes include Caddy
+- a load balancer spreads connections across healthy upstreams
+- one upstream is still a front door. two upstreams are a balancer
+- `proxy_pass` is the hop to Node
+- we send the original host and the client IP if the app needs them
+- WebSocket needs the upgrade headers
+- a 502 means nginx could not get a valid answer from upstream
+
 ```nginx
-location /api/ {
-  proxy_pass http://127.0.0.1:3000/;
-  proxy_set_header Host $host;
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
+server {
+  listen 443 ssl;
+  location /api/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+  location / {
+    root /var/www/app;
+    try_files $uri /index.html;
+  }
 }
 ```
 
-## Load balancers
+- `try_files` sends unknown paths to the single-page app
+- the API location is a proxy. the page location is files
+- least-connections versus round robin matters when some requests are long sockets and some are quick reads
 
-- A load balancer is nginx, or a cloud box, spreading traffic across healthy copies.
-- Round robin is the simple policy.
-- Least connections helps when some requests are long, such as an upload.
-- Health checks pull a bad copy out.
-- On one machine, several Node processes behind nginx are already a small balancer.
-- The balancer is the person at the door with a counter, sending the next guest to a free desk.
-- careful: No health check, so a dead process still gets guests.
-- Sticky or not?
-- Not, if the process is stateless. Sticky hides a session stored in memory. I would rather put the session in Redis or use the JWT we already have.
-
+- homework of chapter 9
 ```nginx
-upstream api { least_conn; server :3000; server :3001; }
+# 9a  which location is files, which is the API
+# 9b  what a 502 points at
+# 9c  the headers a WebSocket upgrade needs
 ```
 
-- homework
-```nginx
-upstream api { least_conn; server :3000; server :3001; }
+## chapter 10 Prometheus, Grafana, and ELK
+
+- Prometheus scrapes a metrics URL on an interval
+- a counter only goes up. requests total. a gauge can go down. queue depth, memory
+- a histogram is for duration. we can ask for a percentile later
+- Grafana draws the Prometheus data
+- a useful board is HTTP duration and queue depth, not a chart nobody opens
+- ELK = Elasticsearch, Logstash or an agent, and Kibana. logs go in, we search them
+- we may ship logs to a file and to Sentry for exceptions. ELK is the search stack when the files are not enough
+- a log line has a request id. it does not have a password or a token
+- Sentry is the exception with a release id. Prometheus is the number over time. they answer different questions
+
+```text
+http_requests_total{route="/port-calls",status="500"}
+queue_depth{name="laytime"}
 ```
 
-## Prometheus
+- a 500 rate and a rising queue depth are the two pictures that page someone
+- a log without a request id cannot be tied to the metric spike
 
-- Prometheus scrapes metrics: numbers your process exposes.
-- A counter only goes up, such as http_requests_total.
-- A histogram measures duration.
-- A gauge is a level, such as queue depth.
-- You add a label for the route, not for the user id. A label with unbounded values will exhaust the server.
-- Prometheus is a clipboard of numbers taken every few seconds. It is not a diary of individual requests.
-- careful: A label per user id or per port call id.
-- Counter or gauge for queue depth?
-- Gauge. Depth goes up and down. A counter is for events that accumulate, such as jobs completed.
-
-```
-http_requests_total{route="/port-calls",status="201"}
-queue_depth{queue="laytime"}
+- homework of chapter 10
+```text
+# 10a  counter or gauge: queue depth
+# 10b  counter or gauge: requests total
+# 10c  what Sentry has that Prometheus does not
+# 10d  two fields that never go in the log line
 ```
 
-- homework
-```
-http_requests_total{route="/port-calls",status="201"}
-queue_depth{queue="laytime"}
-```
+## chapter 11 Blue-green, autoscaling, and secrets
 
-## Grafana
+- blue-green = two copies of the app. one is live. we deploy the other, test it, then move the front door
+- if the new copy is bad, the front door moves back
+- a database migration has to work on both copies during the switch, or we migrate in a way the old code still understands
+- rolling deploy = replace one process at a time. PM2 and a second upstream can do a small version of this
+- autoscaling = add or remove machines from a metric. CPU, request count, queue depth
+- scale the thing that is busy. API CPU is not a reason to add Postgres replicas by magic
+- a scale-in that kills a worker mid-job needs the job to be retryable
+- a secret = a password, a token, a key. it lives in the environment or a secret store, not in git
+- the app reads `process.env`. the file `.env` is local and ignored
+- rotate a secret by adding the new one, deploying, then removing the old one. a JWT signing key needs a moment where both verify
 
-- Grafana draws the Prometheus numbers and pages you when a rule fires.
-- A dashboard for request rate, error rate, duration, and queue depth is enough to start.
-- An alert on error rate over a threshold for five minutes beats an alert on every exception.
-- Look at the deploy marker. A cliff at deploy time is the release.
-- A dashboard nobody opens is decoration. Tie it to a question you have actually asked.
-- Grafana is the glass on the clipboard. The alert is the person who rings you when the number is bad for long enough to be real.
-- careful: An alert on a one-second spike that pages you every night.
-- What do you alert on?
-- Symptoms a user feels: errors and a stuck queue. Not CPU at 40 percent, which might be a healthy encode.
-
-```
-alert: 5xx ratio > 2% for 5 minutes
-alert: laytime queue depth > 100 for 10 minutes
+```text
+blue: live, old release
+green: new release, not in the upstream yet
+test green
+point nginx at green
+keep blue until the graphs look normal
 ```
 
-- homework
-```
-alert: 5xx ratio > 2% for 5 minutes
-alert: laytime queue depth > 100 for 10 minutes
-```
+- we have shipped nginx, PM2, Docker, and GitHub Actions. blue-green is the pattern. a second upstream is the small version
+- autoscaling on queue depth fits the laytime worker. autoscaling the API does not fix a slow query
 
-## ELK logging
-
-- ELK is Elasticsearch, Logstash, and Kibana. Logs go in, and you search them. The idea matters more than the brand.
-- A structured log, JSON, with a request id, is searchable. A pretty sentence is not.
-- Kibana, or any UI, filters on the request id so one failed save shows every line.
-- Keep retention finite. Disk fills.
-- Sentry is for exceptions. The log is for the path. You can run both.
-- ELK is a library of every note the building wrote, with a catalogue.
-- careful: Logging the token so you can 'debug auth'.
-- Sentry or ELK?
-- Sentry when an exception needs a stack and a release. The log pipeline when I need to follow one request across nginx and the API. I do not pick one and throw away the other kind of question.
-
-```json
-{"requestId":"abc","msg":"port call created","ms":40}
+- homework of chapter 11
+```text
+# 11a  what has to be true of a migration during blue-green
+# 11b  a metric that should add a worker, not an API process
+# 11c  where a database password lives, and where it does not
+# 11d  why a signing-key rotation has an overlap
 ```
 
-- homework
-```json
-{"requestId":"abc","msg":"port call created","ms":40}
+## chapter 12 A deploy we can walk
+
+- a pull request runs GitHub Actions
+- merge to main builds an image or a Node build
+- the server pulls it. PM2 reloads the process
+- nginx keeps the public port
+- Postgres stays up. we run a migration as its own step, before the new code expects the column
+- Sentry gets the release id so an exception names the deploy
+- Anemi's box may be Caddy instead of nginx. the hop is the same idea
+
+```text
+pull request -> tests
+main -> build
+server -> migrate -> reload process -> watch errors and latency
 ```
 
-## Blue-green deploys
+- rollback is the previous image and, if the migration was backward compatible, the previous process
+- a migration that deletes a column is not in the same minute as the code that stops writing it. stop writing first, deploy, then delete
 
-- Blue-green means two full environments. One serves traffic. You deploy the other, test it, and switch.
-- Green is the idle copy. You deploy there. You smoke-test. You move the proxy.
-- Rollback is moving the proxy back, if the database migration is compatible.
-- A migration that deletes a column cannot roll back with the proxy alone.
-- On one machine this may be two directories and a symlink nginx follows. The idea is the same.
-- Blue and green are two stages. The audience hears one. You change which stage the speakers are plugged into.
-- careful: A destructive migration in the same minute as the switch.
-- Why is the migration the hard part?
-- The old code and the new code share the database during the switch. The schema must work for both until the old one is gone. Expand, then contract.
-
-```
-proxy -> blue (live)
-deploy green, test green, proxy -> green
-```
-
-- homework
-```
-proxy -> blue (live)
-deploy green, test green, proxy -> green
-```
-
-## Auto scaling
-
-- Auto scaling adds or removes machines from a signal, such as CPU or queue depth.
-- Scale the API on CPU or request latency.
-- Scale workers on queue depth. That is the signal that means laytime is waiting.
-- Set a maximum. A bug that enqueues forever should not buy infinite machines.
-- A scale-up that is faster than your boot time will flap. Add a cooldown.
-- Auto scaling is hiring temporary staff when the queue at the door is long, and sending them home when it is short, with a cap so you do not hire the whole town.
-- careful: Scaling on CPU during a backup and doubling the fleet every night.
-- What happens if you scale the API and not the database?
-- You add clients to a tired Postgres. Latency gets worse. The scaler then adds more API. I scale the thing the metric says is saturated, and I watch the database.
-
-```
-queue depth high for 5 minutes -> one more worker
-maximum workers = 4 until you know the database can take them
-```
-
-- homework
-```
-queue depth high for 5 minutes -> one more worker
-maximum workers = 4 until you know the database can take them
-```
-
-## Secrets management
-
-- A secret is a password, a key, or a token. It does not belong in git.
-- .env is local. Production reads the environment from the host, or from a secret store.
-- GitHub Actions secrets are for the pipeline. They are not printed in logs.
-- Rotate a key that leaked. Assume the old one is public.
-- The database password, the JWT signing key, the Stripe secret, and the TOTP encryption key are the list for your products.
-- A secret is a house key. You do not photocopy it into the group chat or the repository.
-- careful: A private repository treated as a safe. Private only means fewer readers, not none, and forks and logs exist.
-- You committed a key. What now?
-- I revoke it at the provider, issue a new one, put the new one in the environment, and remove the file from git. Deleting the commit is not enough if it was pushed. The old key is burned.
-
-```
-process.env.DATABASE_URL
-never: git add .env
-```
-
-- homework
-```
-process.env.DATABASE_URL
-never: git add .env
+- homework of chapter 12
+```text
+# 12a  the order: migrate, or reload, and why
+# 12b  what we watch for ten minutes after
+# 12c  the tools in this path we have actually run
+# 12d  Anemi's front door if it is not nginx
 ```
